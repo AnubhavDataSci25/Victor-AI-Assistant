@@ -1,0 +1,27 @@
+assistant:
+  name: Victor
+  address_user_as: Sir
+  wake_word: Victor
+
+security:
+  max_failed_attempts: 3
+  lockout_seconds: 60
+  session_timeout_minutes: 15
+
+voice:
+  enabled: false # enabled starting Phase 8
+
+ui:
+  orb_enabled: false # enabled starting Phase 10
+
+greeting:
+  morning_start: "05:00"
+  afternoon_start: "12:00"
+  evening_start: "17:00"
+  night_start: "21:00"
+
+logging:
+  level: INFO
+  directory: logs
+  max_bytes: 5242880 # 5 MB per log file before rotation
+  backup_count: 5

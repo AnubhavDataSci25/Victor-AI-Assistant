@@ -1,0 +1,36 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# --- Victor secrets & local state (NEVER commit these) ---
+.env
+config/local.yaml
+config/secrets.yaml
+*.secret
+*.key
+data/*.db
+data/*.sqlite*
+models/*.bin
+models/*.gguf
+models/*.onnx
+
+# --- Logs (may contain operational detail; never commit) ---
+logs/*.log
+logs/*.log.*
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

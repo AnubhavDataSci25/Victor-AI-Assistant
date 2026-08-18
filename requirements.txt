@@ -1,0 +1,16 @@
+# --- Phase 1: skeleton only ---
+# Config parsing / validation
+PyYAML>=6.0
+pydantic>=2.6
+
+# Testing
+pytest>=8.0
+pytest-cov>=5.0
+
+# --- Added in later phases (kept here as a roadmap, commented out) ---
+# argon2-cffi        # Phase 3 - authentication password hashing
+# fastapi            # Phase 10 - UI/backend server
+# uvicorn
+# playwright         # Phase 7 - browser automation
+# pyautogui          # Phase 4 - computer control
+# psutil             # Phase 4/6 - process inspection
