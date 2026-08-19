@@ -37,6 +37,41 @@ _LIST_DIR_PATTERNS = (
     re.compile(r"^what(?:'s| is)\s+in\s+(?P<path>.+)\??$", re.IGNORECASE),
 )
 
+_OPEN_APP_PATTERNS = (
+    re.compile(r"^open(?:_application)?\s+(?P<app>.+)$", re.IGNORECASE),
+    re.compile(r"^launch\s+(?P<app>.+)$", re.IGNORECASE),
+)
+
+_CLOSE_APP_PATTERNS = (
+    re.compile(r"^close(?:_application)?\s+(?P<app>.+)$", re.IGNORECASE),
+    re.compile(r"^quit\s+(?P<app>.+)$", re.IGNORECASE),
+)
+
+_FOCUS_WINDOW_PATTERNS = (
+    re.compile(r"^focus(?:_window)?\s+(?P<title>.+)$", re.IGNORECASE),
+)
+
+_SWITCH_WINDOW_PATTERNS = (
+    re.compile(r"^switch(?:_window)?\s+to\s+(?P<title>.+)$", re.IGNORECASE),
+)
+
+_SCREENSHOT_PATTERNS = (
+    re.compile(r"^(?:take\s+a\s+)?screenshot\.?$", re.IGNORECASE),
+    re.compile(r"^take_screenshot$", re.IGNORECASE),
+)
+
+_TYPE_TEXT_PATTERNS = (
+    re.compile(r"^type\s+(?P<text>.+)$", re.IGNORECASE),
+)
+
+_PRESS_KEY_PATTERNS = (
+    re.compile(r"^press(?:_key)?\s+(?P<key>\S+)$", re.IGNORECASE),
+)
+
+_HOTKEY_PATTERNS = (
+    re.compile(r"^hotkey\s+(?P<keys>.+)$", re.IGNORECASE),
+)
+
 _SMALL_TALK: dict[re.Pattern[str], str] = {
     re.compile(r"^how are you\??$", re.IGNORECASE): (
         "I'm doing well, Sir. What are we working on?"
@@ -80,6 +115,86 @@ class Router:
                     kind="tool_call",
                     tool_call=ToolCallRequest(
                         tool="list_directory", arguments={"path": path}
+                    ),
+                )
+
+        for pattern in _SCREENSHOT_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(tool="take_screenshot", arguments={}),
+                )
+
+        for pattern in _OPEN_APP_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="open_application",
+                        arguments={"application": match.group("app").strip()},
+                    ),
+                )
+
+        for pattern in _CLOSE_APP_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="close_application",
+                        arguments={"application": match.group("app").strip()},
+                    ),
+                )
+
+        for pattern in _SWITCH_WINDOW_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="switch_window",
+                        arguments={"title": match.group("title").strip()},
+                    ),
+                )
+
+        for pattern in _FOCUS_WINDOW_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="focus_window",
+                        arguments={"title": match.group("title").strip()},
+                    ),
+                )
+
+        for pattern in _HOTKEY_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                keys = [k.strip() for k in match.group("keys").split("+") if k.strip()]
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(tool="hotkey", arguments={"keys": keys}),
+                )
+
+        for pattern in _PRESS_KEY_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="press_key", arguments={"key": match.group("key").strip()}
+                    ),
+                )
+
+        for pattern in _TYPE_TEXT_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="type_text", arguments={"text": match.group("text")}
                     ),
                 )
 

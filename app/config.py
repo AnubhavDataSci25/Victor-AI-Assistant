@@ -101,6 +101,14 @@ class FilesystemConfig(BaseModel):
         return value
 
 
+class ComputerConfig(BaseModel):
+    # Explicit whitelist: friendly name -> launch command. Victor will
+    # refuse to open/close anything not listed here, regardless of what
+    # a user request or future LLM output asks for (rule 19/20).
+    applications: dict[str, str] = Field(default_factory=dict)
+    screenshot_directory: str = "screenshots"
+
+
 class VictorConfig(BaseModel):
     """Root configuration object for Victor."""
 
@@ -111,6 +119,7 @@ class VictorConfig(BaseModel):
     greeting: GreetingConfig = GreetingConfig()
     logging: LoggingConfig = LoggingConfig()
     filesystem: FilesystemConfig = FilesystemConfig()
+    computer: ComputerConfig = ComputerConfig()
 
     model_config = {"extra": "forbid"}
 

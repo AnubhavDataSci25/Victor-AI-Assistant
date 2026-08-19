@@ -35,3 +35,14 @@ filesystem:
   # Any resolved path outside these roots is rejected (rule 7).
   allowed_roots:
     - "~"
+
+computer:
+  # Explicit whitelist of applications Victor may open/close.
+  # Victor will refuse anything not listed here - it never launches
+  # an arbitrary path just because a request (or future LLM output)
+  # names one. Add entries for your own machine, e.g.:
+  #   notepad: notepad.exe
+  #   chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  applications:
+    notepad: notepad.exe
+  screenshot_directory: screenshots

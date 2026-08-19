@@ -108,6 +108,8 @@ def setup_logging(config: LoggingConfig) -> None:
 
     root = logging.getLogger("victor")
     root.setLevel(config.level)
+    for handler in root.handlers:
+        handler.close()
     root.handlers.clear()
     root.propagate = False
 
@@ -150,6 +152,8 @@ def setup_logging(config: LoggingConfig) -> None:
     # tool_calls.log - dedicated logger for every tool invocation
     tool_logger = logging.getLogger(TOOL_CALLS_LOGGER_NAME)
     tool_logger.setLevel(logging.INFO)
+    for handler in tool_logger.handlers:
+        handler.close()
     tool_logger.handlers.clear()
     tool_logger.propagate = True  # also flows into victor.log / console
 

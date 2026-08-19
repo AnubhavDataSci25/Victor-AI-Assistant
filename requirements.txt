@@ -12,5 +12,7 @@ argon2-cffi        # Phase 3 - authentication password hashing
 # fastapi            # Phase 10 - UI/backend server
 # uvicorn
 # playwright         # Phase 7 - browser automation
-# pyautogui          # Phase 4 - computer control
-# psutil             # Phase 4/6 - process inspection
+pyautogui          # Phase 4 - computer control
+pyscreeze          # screenshot support used by pyautogui.screenshot()
+Pillow             # image backend used by pyscreeze
+psutil             # Phase 4/6 - process inspection

@@ -5,6 +5,7 @@ __pycache__/
 .eggs/
 .mypy_cache/
 .pytest_cache/
+.pytest_tmp/
 .coverage
 htmlcov/
 .venv/
@@ -28,6 +29,7 @@ models/*.onnx
 # --- Logs (may contain operational detail; never commit) ---
 logs/*.log
 logs/*.log.*
+screenshots/
 
 # --- OS / editor cruft ---
 .DS_Store

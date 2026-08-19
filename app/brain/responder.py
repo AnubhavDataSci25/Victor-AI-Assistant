@@ -30,6 +30,8 @@ def humanize(result: ToolResult, address_as: str = "Sir") -> str:
             preview = ", ".join(entries[:10])
             more = f", and {len(entries) - 10} more" if len(entries) > 10 else ""
             return f"Found {len(entries)} item(s), {address_as}: {preview}{more}."
+        if result.tool == "take_screenshot" and result.data.get("path"):
+            return f"Screenshot saved to {result.data['path']}, {address_as}."
         return f"Done, {address_as}. {result.message}"
 
     friendly = _FRIENDLY_ERRORS.get(result.error or "")
