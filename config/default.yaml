@@ -7,6 +7,9 @@ security:
   max_failed_attempts: 3
   lockout_seconds: 60
   session_timeout_minutes: 15
+  # Never commit this file's contents - it holds only an Argon2id hash,
+  # never the plaintext phrase. Path is git-ignored by default.
+  secrets_path: config/secrets.yaml
 
 voice:
   enabled: false # enabled starting Phase 8

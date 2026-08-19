@@ -40,6 +40,7 @@ class SecurityConfig(BaseModel):
     max_failed_attempts: int = Field(default=3, ge=1)
     lockout_seconds: int = Field(default=60, ge=1)
     session_timeout_minutes: int = Field(default=15, ge=1)
+    secrets_path: str = "config/secrets.yaml"
 
 
 class VoiceConfig(BaseModel):
@@ -88,15 +89,17 @@ class LoggingConfig(BaseModel):
             )
         return upper
 
+
 class FilesystemConfig(BaseModel):
     allowed_roots: list[str] = Field(default_factory=lambda: ["~"])
- 
+
     @field_validator("allowed_roots")
     @classmethod
     def _non_empty(cls, value: list[str]) -> list[str]:
         if not value:
             raise ValueError("filesystem.allowed_roots must not be empty")
         return value
+
 
 class VictorConfig(BaseModel):
     """Root configuration object for Victor."""

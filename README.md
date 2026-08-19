@@ -6,10 +6,11 @@ A local-first, tool-calling personal AI computer assistant.
 
 ## Status
 
-**Phase 2 — Victor Core.** Tool registry, permission engine, and the
-first tool are live and wired end to end via a temporary rule-based
-router (stands in for the LLM until Phase 9). No authentication,
-computer control, terminal, browser, voice, or UI yet.
+**Phase 3 — Authentication.** Tools now require the wake word →
+security phrase challenge before executing. Argon2id hashing, failed
+attempt lockout, session timeout, and manual lock are all live and
+tested. Casual conversation still works while locked; tool calls do
+not. No computer control, terminal, browser, voice, or UI yet.
 
 
 ## Requirements
@@ -23,6 +24,7 @@ python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
+python scripts/setup_auth.py     # provision your security phrase (Argon2id hash only)
 ```
 
 ## Run
@@ -32,7 +34,15 @@ python -m app.main   # boot check only
 python -m app.cli    # interactive text mode
 ```
 
-Try in the CLI: `list files in ~`, `who are you?`, `how are you?`
+Try in the CLI:
+
+```text
+list files in ~              # blocked - not authenticated yet
+Victor                        # triggers the security phrase challenge
+<your phrase>                  # unlocks
+list files in ~              # now works
+Victor, lock yourself         # manual lock
+```
 
 ## Test
 
@@ -54,7 +64,14 @@ app/
 ├── brain/
 │   ├── router.py                  # TEMPORARY rule-based stand-in for the LLM
 │   ├── responder.py                # ToolResult -> natural language
-│   └── orchestrator.py            # VictorCore: wires router + registry + responder
+│   └── orchestrator.py            # VictorCore: wake word, auth gate, router, registry
+│
+├── auth/
+│   ├── hashing.py                 # Argon2id hash_phrase / verify_phrase
+│   ├── store.py                   # SecretStore: hash-only persistence, 0600 perms
+│   ├── session.py                 # inactivity timeout tracking
+│   ├── manager.py                 # AuthManager: LOCKED/UNLOCKED state machine
+│   └── factory.py                 # builds AuthManager from config
 │
 └── tools/
     ├── models.py                  # ToolCallRequest, ToolResult
@@ -67,9 +84,33 @@ app/
         └── tool.py                # list_directory (first SAFE tool)
 
 tests/
-├── unit/          # 45 tests
-└── integration/   # 3 tests, full text-in -> reply-out chain
+├── unit/          # 66 tests
+├── integration/   # 5 tests, full text-in -> reply-out chain including auth
+└── security/      # 2 tests, phrase never touches disk in logs or plaintext
 ```
+
+## Security notes for Phase 3
+
+- `scripts/setup_auth.py` is the *only* place a plaintext phrase is
+  ever typed. It's read via `getpass` (no echo), hashed immediately,
+  and the local variable is deleted after use.
+- `AuthManager.authenticate()` never logs the candidate phrase, only
+  generic event names (`auth_success`, `auth_failure`, ...). This was
+  verified with a real logging pipeline in
+  `tests/security/test_secrets_not_logged.py`, not just by code
+  review - the redaction filter in `app/logging.py` catches *named*
+  sensitive fields, but not text embedded in a message string, so the
+  auth code itself has to uphold this discipline.
+- `config/secrets.yaml` stores only an Argon2id hash, is git-ignored,
+  and is written with owner-only file permissions (POSIX).
+- Tool calls are gated in `VictorCore.handle_input`, in front of the
+  registry - the registry itself has no concept of authentication, by
+  design, so it can't be bypassed by calling it directly instead of
+  through VictorCore. (A future hardening item, noted for Phase 12, is
+  making the registry refuse to be constructed/dispatched outside an
+  authenticated context at all, rather than relying on the caller to
+  check first.)
+
 
 ## Important note on `app/brain/router.py`
 
@@ -92,8 +133,8 @@ plaintext — see the authentication design in Phase 3.
 ## Roadmap
 
 1. ~~Project skeleton~~
-2. ~~Tool registry + one safe tool end-to-end~~ ← you are here
-3. Authentication (Argon2id, lockout, session timeout)
+2. ~~Tool registry + one safe tool end-to-end~~
+3. ~~Authentication (Argon2id, lockout, session timeout)~~ ← you are here
 4. Computer control
 5. File management
 6. Terminal execution

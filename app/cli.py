@@ -9,6 +9,7 @@ top of the same VictorCore.
 
 from __future__ import annotations
 
+from app.auth.factory import build_auth_manager
 from app.brain.orchestrator import VictorCore
 from app.main import bootstrap
 from app.tools.factory import build_registry
@@ -17,10 +18,16 @@ from app.tools.factory import build_registry
 def run() -> int:
     config = bootstrap()
     registry = build_registry(config)
-    core = VictorCore(config, registry)
+    auth = build_auth_manager(config)
+    core = VictorCore(config, registry, auth)
 
     print(f"{config.assistant.name} is listening (text mode). Type 'exit' to quit.")
-    print('Try: list files in ~')
+    if not auth.is_configured():
+        print(
+            "No security phrase is configured yet - tools will stay locked. "
+            "Run: python scripts/setup_auth.py"
+        )
+    print(f"Say '{config.assistant.wake_word}' to authenticate.")
 
     while True:
         try:

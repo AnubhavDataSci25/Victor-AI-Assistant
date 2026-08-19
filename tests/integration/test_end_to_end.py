@@ -1,33 +1,81 @@
+from app.auth.factory import build_auth_manager
+from app.auth.hashing import hash_phrase
 from app.brain.orchestrator import VictorCore
 from app.config import load_config
 from app.tools.factory import build_registry
 
+PHRASE = "open sesame"
 
-def _core(tmp_path, monkeypatch):
+
+def _core(tmp_path, monkeypatch, provisioned: bool = True):
     monkeypatch.setenv("HOME", str(tmp_path))
     config = load_config("config/default.yaml")
     config.filesystem.allowed_roots = [str(tmp_path)]
+    config.security.secrets_path = str(tmp_path / "secrets.yaml")
     registry = build_registry(config)
-    return VictorCore(config, registry)
+    auth = build_auth_manager(config)
+    if provisioned:
+        auth._store.set_phrase_hash(hash_phrase(PHRASE))
+    return VictorCore(config, registry, auth), auth
 
 
-def test_end_to_end_list_directory(tmp_path, monkeypatch):
+def test_tool_call_denied_while_locked(tmp_path, monkeypatch):
     (tmp_path / "notes.txt").write_text("hi")
-    core = _core(tmp_path, monkeypatch)
+    core, _ = _core(tmp_path, monkeypatch)
 
     reply = core.handle_input(f"list files in {tmp_path}")
 
-    assert "notes.txt" in reply
-    assert "Sir" in reply
+    assert "authenticate" in reply.lower()
 
 
-def test_end_to_end_small_talk_does_not_touch_filesystem(tmp_path, monkeypatch):
-    core = _core(tmp_path, monkeypatch)
+def test_casual_conversation_allowed_while_locked(tmp_path, monkeypatch):
+    core, _ = _core(tmp_path, monkeypatch)
     reply = core.handle_input("who are you?")
     assert "Victor" in reply
 
 
-def test_end_to_end_unknown_path_reports_friendly_error(tmp_path, monkeypatch):
-    core = _core(tmp_path, monkeypatch)
-    reply = core.handle_input(f"list files in {tmp_path / 'missing'}")
-    assert "Sir" in reply or "does not exist" in reply
+def test_full_wake_authenticate_then_tool_flow(tmp_path, monkeypatch):
+    (tmp_path / "notes.txt").write_text("hi")
+    core, _ = _core(tmp_path, monkeypatch)
+
+    wake_reply = core.handle_input("Victor")
+    assert "verification required" in wake_reply.lower()
+
+    auth_reply = core.handle_input(PHRASE)
+    assert "verified" in auth_reply.lower()
+
+    tool_reply = core.handle_input(f"list files in {tmp_path}")
+    assert "notes.txt" in tool_reply
+
+
+def test_wrong_phrase_keeps_tools_locked(tmp_path, monkeypatch):
+    """
+    After a wrong phrase, Victor stays in the authentication challenge
+    (spec section 10: consecutive attempts), so the next input is
+    still treated as a phrase attempt - not as a command. Either way,
+    the tool must never execute.
+    """
+    (tmp_path / "notes.txt").write_text("hi")
+    core, _ = _core(tmp_path, monkeypatch)
+
+    core.handle_input("Victor")
+    auth_reply = core.handle_input("wrong phrase")
+    assert "failed" in auth_reply.lower()
+
+    # Still inside the challenge - this is consumed as another phrase
+    # attempt, not routed to the filesystem tool.
+    second_reply = core.handle_input(f"list files in {tmp_path}")
+    assert "notes.txt" not in second_reply
+
+
+def test_manual_lock_relocks_active_session(tmp_path, monkeypatch):
+    (tmp_path / "notes.txt").write_text("hi")
+    core, _ = _core(tmp_path, monkeypatch)
+
+    core.handle_input("Victor")
+    core.handle_input(PHRASE)
+    lock_reply = core.handle_input("Victor, lock yourself")
+    assert "locked" in lock_reply.lower()
+
+    tool_reply = core.handle_input(f"list files in {tmp_path}")
+    assert "authenticate" in tool_reply.lower()
