@@ -6,9 +6,11 @@ A local-first, tool-calling personal AI computer assistant.
 
 ## Status
 
-**Phase 1 — Project Skeleton.** No tools, authentication, voice, or UI
-are implemented yet. This phase only proves the application boots
-reliably with validated configuration and structured logging.
+**Phase 2 — Victor Core.** Tool registry, permission engine, and the
+first tool are live and wired end to end via a temporary rule-based
+router (stands in for the LLM until Phase 9). No authentication,
+computer control, terminal, browser, voice, or UI yet.
+
 
 ## Requirements
 
@@ -26,8 +28,11 @@ cp .env.example .env
 ## Run
 
 ```bash
-python -m app.main
+python -m app.main   # boot check only
+python -m app.cli    # interactive text mode
 ```
+
+Try in the CLI: `list files in ~`, `who are you?`, `how are you?`
 
 ## Test
 
@@ -37,23 +42,46 @@ pytest tests/ -v
 
 ## Project layout
 
-See `docs/architecture.md` (added as later phases land) and the
-master specification for the full target architecture. Currently
-implemented:
+Currently implemented:
 
 ```text
 app/
-├── main.py       # entrypoint: loads config, sets up logging, boots
-├── config.py     # typed, validated YAML configuration loading
-└── logging.py    # structured JSON logging with mandatory secret redaction
+├── main.py                        # boot: config + logging
+├── cli.py                         # interactive text REPL
+├── config.py                      # typed, validated YAML configuration
+├── logging.py                     # structured JSON logging + redaction
+│
+├── brain/
+│   ├── router.py                  # TEMPORARY rule-based stand-in for the LLM
+│   ├── responder.py                # ToolResult -> natural language
+│   └── orchestrator.py            # VictorCore: wires router + registry + responder
+│
+└── tools/
+    ├── models.py                  # ToolCallRequest, ToolResult
+    ├── permissions.py             # PermissionLevel, PermissionEngine (Layer 2 security)
+    ├── base.py                    # Tool abstract base class
+    ├── registry.py                # ToolRegistry: validate -> permission -> execute -> verify -> log
+    ├── factory.py                 # builds the registry from config
+    └── filesystem/
+        ├── path_validation.py     # allowed-roots + traversal protection
+        └── tool.py                # list_directory (first SAFE tool)
 
-config/
-└── default.yaml  # default configuration
-
-tests/unit/
-├── test_config.py
-└── test_logging.py
+tests/
+├── unit/          # 45 tests
+└── integration/   # 3 tests, full text-in -> reply-out chain
 ```
+
+## Important note on `app/brain/router.py`
+
+This is explicitly a temporary stub, not the real LLM integration.
+It exists so the whole safety chain (tool call → validation →
+permission → execution → verification → structured result →
+response) could be proven without depending on a running Ollama
+instance. Its output is still just a `ToolCallRequest` — it goes
+through the exact same registry/permission gate as any future LLM
+output would. When Ollama integration lands (Phase 9), only this
+module's internals change.
+
 
 ## Security note
 
@@ -63,8 +91,8 @@ plaintext — see the authentication design in Phase 3.
 
 ## Roadmap
 
-1. ~~Project skeleton~~ ← you are here
-2. Tool registry + one safe tool end-to-end
+1. ~~Project skeleton~~
+2. ~~Tool registry + one safe tool end-to-end~~ ← you are here
 3. Authentication (Argon2id, lockout, session timeout)
 4. Computer control
 5. File management

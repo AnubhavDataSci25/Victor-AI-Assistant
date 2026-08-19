@@ -88,6 +88,15 @@ class LoggingConfig(BaseModel):
             )
         return upper
 
+class FilesystemConfig(BaseModel):
+    allowed_roots: list[str] = Field(default_factory=lambda: ["~"])
+ 
+    @field_validator("allowed_roots")
+    @classmethod
+    def _non_empty(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("filesystem.allowed_roots must not be empty")
+        return value
 
 class VictorConfig(BaseModel):
     """Root configuration object for Victor."""
@@ -98,6 +107,7 @@ class VictorConfig(BaseModel):
     ui: UIConfig = UIConfig()
     greeting: GreetingConfig = GreetingConfig()
     logging: LoggingConfig = LoggingConfig()
+    filesystem: FilesystemConfig = FilesystemConfig()
 
     model_config = {"extra": "forbid"}
 

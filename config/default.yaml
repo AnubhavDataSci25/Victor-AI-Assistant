@@ -25,3 +25,10 @@ logging:
   directory: logs
   max_bytes: 5242880 # 5 MB per log file before rotation
   backup_count: 5
+
+filesystem:
+  # Directories Victor's filesystem tools are allowed to touch.
+  # "~" is expanded to the user's home directory at load time.
+  # Any resolved path outside these roots is rejected (rule 7).
+  allowed_roots:
+    - "~"
