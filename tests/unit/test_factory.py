@@ -55,3 +55,9 @@ def test_all_phase5_filesystem_tools_are_registered():
         "delete_file",
         "delete_directory",
     }.issubset(names)
+
+
+def test_all_phase6_terminal_tools_are_registered():
+    registry = build_registry(_config(), computer_driver=None)
+    names = {t["name"] for t in registry.list_tools()}
+    assert {"run_command", "run_python", "start_process", "stop_process"}.issubset(names)

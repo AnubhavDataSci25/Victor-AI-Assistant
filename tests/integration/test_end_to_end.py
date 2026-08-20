@@ -155,3 +155,51 @@ def test_file_operations_denied_while_locked(tmp_path, monkeypatch):
     reply = core.handle_input(f"read {target}")
 
     assert "authenticate" in reply.lower()
+
+
+def test_run_command_low_risk_executes_after_authentication(tmp_path, monkeypatch):
+    core, _, _driver = _core(tmp_path, monkeypatch)
+
+    core.handle_input("Victor")
+    core.handle_input(PHRASE)
+    reply = core.handle_input("run echo hello")
+
+    assert "hello" in reply.lower()
+
+
+def test_run_command_denied_while_locked(tmp_path, monkeypatch):
+    core, _, _driver = _core(tmp_path, monkeypatch)
+    reply = core.handle_input("run echo hello")
+    assert "authenticate" in reply.lower()
+
+
+def test_run_command_medium_risk_denied_without_confirmation(tmp_path, monkeypatch):
+    core, _, _driver = _core(tmp_path, monkeypatch)
+
+    core.handle_input("Victor")
+    core.handle_input(PHRASE)
+    reply = core.handle_input("run pip install requests")
+
+    assert "confirmation" in reply.lower() or "requires" in reply.lower()
+
+
+def test_run_command_blocked_command_always_denied(tmp_path, monkeypatch):
+    """A BLOCKED command must be denied even for an authenticated
+    session - there is no confirmation path that unlocks it."""
+    core, _, _driver = _core(tmp_path, monkeypatch)
+
+    core.handle_input("Victor")
+    core.handle_input(PHRASE)
+    reply = core.handle_input("run del important.txt")
+
+    assert "blocked" in reply.lower() or "cannot be executed" in reply.lower()
+
+
+def test_run_python_after_authentication(tmp_path, monkeypatch):
+    core, _, _driver = _core(tmp_path, monkeypatch)
+
+    core.handle_input("Victor")
+    core.handle_input(PHRASE)
+    reply = core.handle_input("run_python print(6 * 7)")
+
+    assert "42" in reply

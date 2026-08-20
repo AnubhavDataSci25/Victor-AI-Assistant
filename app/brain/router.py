@@ -113,6 +113,42 @@ _SEARCH_FILES_PATTERNS = (
     re.compile(r"^search\s+for\s+(?P<query>.+?)\s+in\s+(?P<path>.+)$", re.IGNORECASE),
 )
 
+_RUN_COMMAND_PATTERNS = (
+    re.compile(r"^run_command\s+(?P<command>.+)$", re.IGNORECASE),
+    re.compile(r"^run\s+(?P<command>.+)$", re.IGNORECASE),
+)
+
+_RUN_PYTHON_PATTERNS = (
+    re.compile(r"^run_python\s+(?P<code>.+)$", re.IGNORECASE),
+)
+
+_START_PROCESS_PATTERNS = (
+    re.compile(r"^start_process\s+(?P<command>.+)$", re.IGNORECASE),
+    re.compile(r"^start\s+process\s+(?P<command>.+)$", re.IGNORECASE),
+)
+
+_STOP_PROCESS_PATTERNS = (
+    re.compile(r"^stop_process\s+(?P<pid>\d+)$", re.IGNORECASE),
+    re.compile(r"^stop\s+process\s+(?P<pid>\d+)$", re.IGNORECASE),
+)
+
+_INCOMPLETE_START_PROCESS_PATTERNS = (
+    re.compile(r"^start_process$", re.IGNORECASE),
+    re.compile(r"^start\s+process$", re.IGNORECASE),
+)
+
+_BARE_COMMAND_PATTERNS = (
+    re.compile(
+        r"^(?:python3?|py|pytest|git|dir|ls|npm|node|npx|yarn|pip3?|where|which|echo)\b.*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:shutdown|format|diskpart|chkdsk|del|erase|rmdir|rm|mkfs|reg\s+delete|"
+        r"takeown|net\s+user|wevtutil|set-executionpolicy|restart-computer)\b.*$",
+        re.IGNORECASE,
+    ),
+)
+
 _SMALL_TALK: dict[re.Pattern[str], str] = {
     re.compile(r"^how are you\??$", re.IGNORECASE): (
         "I'm doing well, Sir. What are we working on?"
@@ -121,8 +157,8 @@ _SMALL_TALK: dict[re.Pattern[str], str] = {
         "I'm Victor, Sir. Your personal AI assistant."
     ),
     re.compile(r"^what can you do\??$", re.IGNORECASE): (
-        "Right now I can hold a conversation and list directory "
-        "contents, Sir. More capabilities are on the way."
+        "Right now I can work with files, control basic applications, "
+        "and run terminal commands after authentication, Sir."
     ),
 }
 
@@ -363,6 +399,65 @@ class Router:
                     kind="tool_call",
                     tool_call=ToolCallRequest(
                         tool="read_file", arguments={"path": match.group("path").strip()}
+                    ),
+                )
+
+        for pattern in _STOP_PROCESS_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="stop_process", arguments={"pid": int(match.group("pid"))}
+                    ),
+                )
+
+        for pattern in _START_PROCESS_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="start_process",
+                        arguments={"command": match.group("command").strip()},
+                    ),
+                )
+
+        for pattern in _INCOMPLETE_START_PROCESS_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="conversation",
+                    reply='Tell me what to start, Sir. For example: "start process npm run dev".',
+                )
+
+        for pattern in _RUN_PYTHON_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="run_python", arguments={"code": match.group("code")}
+                    ),
+                )
+
+        for pattern in _RUN_COMMAND_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="run_command",
+                        arguments={"command": match.group("command").strip()},
+                    ),
+                )
+
+        for pattern in _BARE_COMMAND_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="run_command",
+                        arguments={"command": stripped},
                     ),
                 )
 

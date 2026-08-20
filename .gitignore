@@ -13,6 +13,7 @@ venv/
 env/
 build/
 dist/
+test.py
 
 # --- Victor secrets & local state (NEVER commit these) ---
 .env

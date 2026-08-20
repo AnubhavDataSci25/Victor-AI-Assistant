@@ -6,13 +6,13 @@ A local-first, tool-calling personal AI computer assistant.
 
 ## Status
 
-**Phase 5 — File Management.** Victor now has the full filesystem
-tool set from spec section 21: search, find, read, create, write,
-append, rename, copy, move, delete (file and directory). All are path-
-validated against the allowed-roots sandbox; risky operations
-(write_file, rename_file, move_file, delete_file, delete_directory)
-are correctly denied pending Phase 12's confirmation flow, same
-pattern established for close_application in Phase 4. No terminal,
+**Phase 6 — Terminal / Code Execution.** `run_command`, `run_python`,
+`start_process`, `stop_process` are live. Command risk is classified
+per-invocation by a deterministic pattern-matching validator (spec
+section 23) - the same tool call can be LOW, MEDIUM, or BLOCKED
+depending on what command was asked for. This required a small
+architecture extension: `Tool.classify(args)` lets a tool's effective
+permission level depend on its arguments, not just its class. No
 browser, voice, or UI yet.
 
 
@@ -90,6 +90,10 @@ app/
     │   │                            # append_file (LOW), write_file (MEDIUM)
     │   ├── modify_tools.py         # copy_file (LOW), rename/move_file (MEDIUM)
     │   └── delete_tools.py         # delete_file, delete_directory (HIGH)
+    ├── terminal/
+    │   ├── validator.py            # classify_command: deterministic risk classifier
+    │   ├── process_manager.py      # tracks Victor-started background processes
+    │   └── tool.py                  # run_command, run_python, start/stop_process
     └── computer/
         ├── driver.py               # ComputerDriver protocol + DriverError
         ├── fake_driver.py          # in-memory driver used by all tool tests
@@ -98,34 +102,55 @@ app/
                                      # type_text, press_key, hotkey, take_screenshot
 
 tests/
-├── unit/          # 152 tests
-├── integration/   # 11 tests, full text-in -> reply-out chain including auth, computer control, files
+├── unit/          # 181 tests
+├── integration/   # 16 tests, full text-in -> reply-out chain including auth, computer control, files, terminal
 └── security/      # 2 tests, phrase never touches disk in logs or plaintext
 ```
 
-## Permission judgment calls for Phase 5
+## Architecture note: dynamic permission classification (Phase 6)
 
-Spec section 12's table only lists a few filesystem operations
-explicitly. For the rest, I classified by data-loss risk:
+Every prior tool had one fixed permission level. `run_command` breaks
+that assumption - `python --version` and `pip install x` go through
+the identical tool but carry very different risk. Rather than special-
+case the registry for terminal tools, `Tool` gained one new method:
 
-| Tool | Level | Why |
-|---|---|---|
-| list_directory, search_files, find_file, read_file | SAFE | read-only |
-| create_file, create_directory | SAFE | refuses to overwrite; can only add |
-| append_file, copy_file | LOW | additive only, never destroys existing bytes |
-| write_file, rename_file, move_file | MEDIUM | can overwrite/relocate; destination collisions are refused, but the underlying operation still risks data loss |
-| delete_file, delete_directory | HIGH | matches spec section 12 explicitly |
+```python
+def classify(self, args: BaseModel) -> PermissionLevel:
+    return self.permission_level  # default: unchanged behavior
+```
 
-`delete_directory` also requires an explicit `recursive=True` for a
-non-empty directory even after HIGH gets a confirmation flow in a
-later phase - a confirmed "delete this" shouldn't accidentally mean
-"delete everything inside it" too.
+`ToolRegistry.dispatch()` now calls `tool.classify(args)` instead of
+reading `tool.permission_level` directly. Every tool from Phases 2-5
+gets the default implementation and behaves exactly as before -
+verified by `test_registry_dynamic_permission.py`. Only
+`run_command`/`start_process` override it, delegating to
+`classify_command()` - the deterministic pattern-matching validator in
+`app/tools/terminal/validator.py`. The classification logic is still
+pure application code with no LLM involvement, per rule 20.
 
-Every MEDIUM/HIGH tool above is registered and reachable through the
-router, but currently always denied by the permission engine, since
-there's no confirmation UI yet (proven in
-`test_delete_file_denied_without_confirmation` and similar tests) -
-this is intentional, not a gap.
+## Security notes for Phase 6
+
+- **`classify_command()` is deliberately conservative.** Where spec
+  section 23 names a narrow example (`rmdir /s`), the pattern here is
+  broader (any `rmdir`) - a false positive costs a retry; a false
+  negative risks real data. Same reasoning extended it to cover
+  patterns not in the spec at all: pipe-to-shell (`curl ... | bash`,
+  `iwr ... | iex`) is blocked outright as unbounded remote code
+  execution, and a classic shell fork bomb pattern is blocked too.
+- **`stop_process` can only stop what Victor itself started.**
+  `ProcessManager` tracks PIDs from `start_process` calls; an
+  untracked PID is refused with a clear message, not silently
+  ignored or (worse) attempted against an arbitrary system process.
+- **`run_python` never touches the shell at all** - code is passed as
+  a single `argv` element to the interpreter (`subprocess.run([sys.executable, "-c", code], ...)`),
+  not shell-parsed, even though it's still classified the same LOW
+  level as `run_command`'s safest tier.
+- **`run_command`/`start_process` do use `shell=True`.** This is a
+  deliberate, documented choice (see `validator.py`'s docstring): many
+  everyday commands (`dir`, `cd`) are shell builtins with no
+  standalone executable, so `shell=False` would break basic usage.
+  Safety here comes from classification happening *before* the
+  subprocess call, not from avoiding the shell.
 
 ## Testing note: computer control tools
 
@@ -222,8 +247,9 @@ plaintext — see the authentication design in Phase 3.
 2. ~~Tool registry + one safe tool end-to-end~~
 3. ~~Authentication (Argon2id, lockout, session timeout)~~
 4. ~~Computer control~~
-5. ~~File management~~ ← you are here
-6. Terminal
+5. ~~File management~~
+6. ~~Terminal~~ ← we are here
+7. Browser
 5. File management
 6. Terminal execution
 7. Browser automation

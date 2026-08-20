@@ -45,10 +45,24 @@ def humanize(result: ToolResult, address_as: str = "Sir") -> str:
             preview = content if len(content) <= 500 else content[:500] + "..."
             return f"Here's {result.data.get('path')}, {address_as}:\n\n{preview}"
 
+        if result.tool in ("run_command", "run_python"):
+            output = (result.stdout or "").strip()
+            if not output:
+                return f"Done, {address_as}. No output."
+            preview = output if len(output) <= 500 else output[:500] + "..."
+            return f"Done, {address_as}. Output:\n\n{preview}"
+
         return f"Done, {address_as}. {result.message}"
 
     friendly = _FRIENDLY_ERRORS.get(result.error or "")
     if friendly:
         return friendly
+
+    if result.tool in ("run_command", "run_python") and result.error == "nonzero_exit":
+        stderr = (result.stderr or "").strip()
+        if stderr:
+            preview = stderr if len(stderr) <= 500 else stderr[:500] + "..."
+            return f"{address_as}, that failed (exit code {result.exit_code}):\n\n{preview}"
+
     # Fall back to the tool/registry-provided message rather than hiding it.
     return f"{result.message}"

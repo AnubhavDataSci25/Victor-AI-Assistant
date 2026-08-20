@@ -85,16 +85,17 @@ class ToolRegistry:
             self._log(request, tool.permission_level.value, result, start)
             return result
 
-        decision = self._permission_engine.decide(tool.permission_level, confirmed)
+        decision = self._permission_engine.decide(tool.classify(args), confirmed)
+        effective_level = tool.classify(args)
         if decision is not PermissionDecision.ALLOWED:
-            reason = self._permission_engine.explain(tool.permission_level, decision)
+            reason = self._permission_engine.explain(effective_level, decision)
             result = ToolResult(
                 success=False,
                 tool=tool.name,
                 message=reason,
                 error="permission_denied",
             )
-            self._log(request, tool.permission_level.value, result, start)
+            self._log(request, effective_level.value, result, start)
             return result
 
         try:
@@ -107,7 +108,7 @@ class ToolRegistry:
                 message=f"{tool.name} failed unexpectedly: {exc}",
                 error="unhandled_exception",
             )
-            self._log(request, tool.permission_level.value, result, start)
+            self._log(request, effective_level.value, result, start)
             return result
 
         try:
@@ -121,7 +122,7 @@ class ToolRegistry:
                 error="verification_failed",
             )
 
-        self._log(request, tool.permission_level.value, result, start)
+        self._log(request, effective_level.value, result, start)
         return result
 
     def _log(

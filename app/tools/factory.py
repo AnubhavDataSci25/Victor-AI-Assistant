@@ -35,6 +35,13 @@ from app.tools.filesystem.write_tools import (
     WriteFileTool,
 )
 from app.tools.registry import ToolRegistry
+from app.tools.terminal.process_manager import ProcessManager
+from app.tools.terminal.tool import (
+    RunCommandTool,
+    RunPythonTool,
+    StartProcessTool,
+    StopProcessTool,
+)
 
 logger = get_logger("tools.factory")
 
@@ -91,6 +98,12 @@ def build_registry(
     registry.register(MoveFileTool(allowed_roots=allowed_roots))
     registry.register(DeleteFileTool(allowed_roots=allowed_roots))
     registry.register(DeleteDirectoryTool(allowed_roots=allowed_roots))
+
+    process_manager = ProcessManager()
+    registry.register(RunCommandTool())
+    registry.register(RunPythonTool())
+    registry.register(StartProcessTool(process_manager=process_manager))
+    registry.register(StopProcessTool(process_manager=process_manager))
 
     driver = _build_computer_driver() if computer_driver is _AUTO else computer_driver
     if driver is not None:

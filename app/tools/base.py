@@ -55,3 +55,15 @@ class Tool(ABC):
         and meaningful (e.g. checking a file now exists).
         """
         return result
+
+    def classify(self, args: BaseModel) -> PermissionLevel:
+        """
+        Return the permission level for THIS specific invocation.
+        Defaults to the tool's static permission_level. Override this
+        when a single tool's risk depends on its arguments - e.g.
+        run_command's risk depends entirely on what command was asked
+        for ("python --version" vs "pip install x"). The classification
+        logic itself must remain deterministic application code, never
+        LLM output (rule 20).
+        """
+        return self.permission_level
