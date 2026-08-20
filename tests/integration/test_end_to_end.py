@@ -14,7 +14,6 @@ def _core(tmp_path, monkeypatch, provisioned: bool = True):
     config.filesystem.allowed_roots = [str(tmp_path)]
     config.security.secrets_path = str(tmp_path / "secrets.yaml")
     config.computer.applications = {"notepad": "notepad.exe"}
-    config.computer.screenshot_directory = str(tmp_path / "screenshots")
     driver = FakeComputerDriver()
     registry = build_registry(config, computer_driver=driver)
     auth = build_auth_manager(config)
@@ -120,13 +119,39 @@ def test_close_application_requires_confirmation_not_yet_available(tmp_path, mon
     assert "confirmation" in reply.lower() or "requires" in reply.lower()
 
 
-def test_screenshot_after_authentication_reports_saved_path(tmp_path, monkeypatch):
+def test_create_and_read_file_after_authentication(tmp_path, monkeypatch):
     core, _, _driver = _core(tmp_path, monkeypatch)
 
     core.handle_input("Victor")
     core.handle_input(PHRASE)
-    reply = core.handle_input("take a screenshot")
+    create_reply = core.handle_input(f"create_file {tmp_path / 'diary.txt'} hello there")
+    read_reply = core.handle_input(f"read {tmp_path / 'diary.txt'}")
 
-    assert "screenshot saved to" in reply.lower()
-    assert str(tmp_path / "screenshots") in reply
-    assert len(list((tmp_path / "screenshots").glob("*.png"))) == 1
+    assert "Sir" in create_reply
+    assert "hello there" in read_reply
+
+
+def test_delete_file_denied_without_confirmation(tmp_path, monkeypatch):
+    """delete_file is HIGH risk (spec section 12) and must stay denied
+    until a real confirmation flow exists, even for an authenticated
+    session."""
+    core, _, _driver = _core(tmp_path, monkeypatch)
+    target = tmp_path / "important.txt"
+    target.write_text("do not delete")
+
+    core.handle_input("Victor")
+    core.handle_input(PHRASE)
+    reply = core.handle_input(f"delete file {target}")
+
+    assert target.exists()
+    assert "confirmation" in reply.lower() or "requires" in reply.lower()
+
+
+def test_file_operations_denied_while_locked(tmp_path, monkeypatch):
+    core, _, _driver = _core(tmp_path, monkeypatch)
+    target = tmp_path / "secret.txt"
+    target.write_text("classified")
+
+    reply = core.handle_input(f"read {target}")
+
+    assert "authenticate" in reply.lower()

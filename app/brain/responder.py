@@ -30,8 +30,21 @@ def humanize(result: ToolResult, address_as: str = "Sir") -> str:
             preview = ", ".join(entries[:10])
             more = f", and {len(entries) - 10} more" if len(entries) > 10 else ""
             return f"Found {len(entries)} item(s), {address_as}: {preview}{more}."
-        if result.tool == "take_screenshot" and result.data.get("path"):
-            return f"Screenshot saved to {result.data['path']}, {address_as}."
+
+        if result.tool in ("search_files", "find_file"):
+            matches = result.data.get("matches", [])
+            if not matches:
+                return f"No matches found, {address_as}."
+            preview = ", ".join(matches[:10])
+            more = f", and {len(matches) - 10} more" if len(matches) > 10 else ""
+            truncated = " (results truncated)" if result.data.get("truncated") else ""
+            return f"Found {len(matches)} match(es), {address_as}: {preview}{more}{truncated}."
+
+        if result.tool == "read_file":
+            content = result.data.get("content", "")
+            preview = content if len(content) <= 500 else content[:500] + "..."
+            return f"Here's {result.data.get('path')}, {address_as}:\n\n{preview}"
+
         return f"Done, {address_as}. {result.message}"
 
     friendly = _FRIENDLY_ERRORS.get(result.error or "")

@@ -92,6 +92,7 @@ class LoggingConfig(BaseModel):
 
 class FilesystemConfig(BaseModel):
     allowed_roots: list[str] = Field(default_factory=lambda: ["~"])
+    max_read_bytes: int = Field(default=1_048_576, ge=1)  # 1 MiB default cap
 
     @field_validator("allowed_roots")
     @classmethod
@@ -106,7 +107,6 @@ class ComputerConfig(BaseModel):
     # refuse to open/close anything not listed here, regardless of what
     # a user request or future LLM output asks for (rule 19/20).
     applications: dict[str, str] = Field(default_factory=dict)
-    screenshot_directory: str = "screenshots"
 
 
 class VictorConfig(BaseModel):

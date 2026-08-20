@@ -72,6 +72,47 @@ _HOTKEY_PATTERNS = (
     re.compile(r"^hotkey\s+(?P<keys>.+)$", re.IGNORECASE),
 )
 
+_READ_FILE_PATTERNS = (
+    re.compile(r"^read(?:_file)?\s+(?P<path>.+)$", re.IGNORECASE),
+)
+
+_CREATE_FILE_PATTERNS = (
+    re.compile(r"^create_file\s+(?P<path>\S+)(?:\s+(?P<content>.*))?$", re.IGNORECASE),
+)
+
+_CREATE_DIR_PATTERNS = (
+    re.compile(r"^(?:create|make)\s+(?:directory|folder)\s+(?P<path>.+)$", re.IGNORECASE),
+)
+
+_DELETE_FILE_PATTERNS = (
+    re.compile(r"^delete_file\s+(?P<path>.+)$", re.IGNORECASE),
+    re.compile(r"^delete\s+file\s+(?P<path>.+)$", re.IGNORECASE),
+)
+
+_DELETE_DIR_PATTERNS = (
+    re.compile(r"^delete\s+(?:directory|folder)\s+(?P<path>.+)$", re.IGNORECASE),
+)
+
+_COPY_FILE_PATTERNS = (
+    re.compile(r"^copy\s+(?P<source>.+?)\s+to\s+(?P<destination>.+)$", re.IGNORECASE),
+)
+
+_MOVE_FILE_PATTERNS = (
+    re.compile(r"^move\s+(?P<source>.+?)\s+to\s+(?P<destination>.+)$", re.IGNORECASE),
+)
+
+_RENAME_FILE_PATTERNS = (
+    re.compile(r"^rename\s+(?P<path>.+?)\s+to\s+(?P<new_name>.+)$", re.IGNORECASE),
+)
+
+_FIND_FILE_PATTERNS = (
+    re.compile(r"^find\s+(?:file\s+)?(?P<filename>\S+)\s+in\s+(?P<path>.+)$", re.IGNORECASE),
+)
+
+_SEARCH_FILES_PATTERNS = (
+    re.compile(r"^search\s+for\s+(?P<query>.+?)\s+in\s+(?P<path>.+)$", re.IGNORECASE),
+)
+
 _SMALL_TALK: dict[re.Pattern[str], str] = {
     re.compile(r"^how are you\??$", re.IGNORECASE): (
         "I'm doing well, Sir. What are we working on?"
@@ -195,6 +236,133 @@ class Router:
                     kind="tool_call",
                     tool_call=ToolCallRequest(
                         tool="type_text", arguments={"text": match.group("text")}
+                    ),
+                )
+
+        for pattern in _CREATE_DIR_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="create_directory",
+                        arguments={"path": match.group("path").strip()},
+                    ),
+                )
+
+        for pattern in _CREATE_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="create_file",
+                        arguments={
+                            "path": match.group("path").strip(),
+                            "content": (match.group("content") or "").strip(),
+                        },
+                    ),
+                )
+
+        for pattern in _DELETE_DIR_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="delete_directory",
+                        arguments={"path": match.group("path").strip()},
+                    ),
+                )
+
+        for pattern in _DELETE_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="delete_file",
+                        arguments={"path": match.group("path").strip()},
+                    ),
+                )
+
+        for pattern in _COPY_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="copy_file",
+                        arguments={
+                            "source": match.group("source").strip(),
+                            "destination": match.group("destination").strip(),
+                        },
+                    ),
+                )
+
+        for pattern in _MOVE_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="move_file",
+                        arguments={
+                            "source": match.group("source").strip(),
+                            "destination": match.group("destination").strip(),
+                        },
+                    ),
+                )
+
+        for pattern in _RENAME_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="rename_file",
+                        arguments={
+                            "path": match.group("path").strip(),
+                            "new_name": match.group("new_name").strip(),
+                        },
+                    ),
+                )
+
+        for pattern in _FIND_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="find_file",
+                        arguments={
+                            "filename": match.group("filename").strip(),
+                            "path": match.group("path").strip(),
+                        },
+                    ),
+                )
+
+        for pattern in _SEARCH_FILES_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="search_files",
+                        arguments={
+                            "query": match.group("query").strip(),
+                            "path": match.group("path").strip(),
+                        },
+                    ),
+                )
+
+        for pattern in _READ_FILE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="read_file", arguments={"path": match.group("path").strip()}
                     ),
                 )
 

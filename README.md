@@ -6,11 +6,14 @@ A local-first, tool-calling personal AI computer assistant.
 
 ## Status
 
-**Phase 3 — Authentication.** Tools now require the wake word →
-security phrase challenge before executing. Argon2id hashing, failed
-attempt lockout, session timeout, and manual lock are all live and
-tested. Casual conversation still works while locked; tool calls do
-not. No computer control, terminal, browser, voice, or UI yet.
+**Phase 5 — File Management.** Victor now has the full filesystem
+tool set from spec section 21: search, find, read, create, write,
+append, rename, copy, move, delete (file and directory). All are path-
+validated against the allowed-roots sandbox; risky operations
+(write_file, rename_file, move_file, delete_file, delete_directory)
+are correctly denied pending Phase 12's confirmation flow, same
+pattern established for close_application in Phase 4. No terminal,
+browser, voice, or UI yet.
 
 
 ## Requirements
@@ -78,16 +81,99 @@ app/
     ├── permissions.py             # PermissionLevel, PermissionEngine (Layer 2 security)
     ├── base.py                    # Tool abstract base class
     ├── registry.py                # ToolRegistry: validate -> permission -> execute -> verify -> log
-    ├── factory.py                 # builds the registry from config
-    └── filesystem/
-        ├── path_validation.py     # allowed-roots + traversal protection
-        └── tool.py                # list_directory (first SAFE tool)
+    ├── factory.py                 # builds the registry from config (+ driver selection)
+    ├── filesystem/
+    │   ├── path_validation.py     # allowed-roots + traversal protection
+    │   ├── tool.py                 # list_directory (SAFE)
+    │   ├── read_tools.py           # search_files, find_file, read_file (SAFE)
+    │   ├── write_tools.py          # create_file, create_directory (SAFE),
+    │   │                            # append_file (LOW), write_file (MEDIUM)
+    │   ├── modify_tools.py         # copy_file (LOW), rename/move_file (MEDIUM)
+    │   └── delete_tools.py         # delete_file, delete_directory (HIGH)
+    └── computer/
+        ├── driver.py               # ComputerDriver protocol + DriverError
+        ├── fake_driver.py          # in-memory driver used by all tool tests
+        ├── windows_driver.py       # real driver: subprocess + psutil + pyautogui
+        └── tool.py                 # 8 tools: open/close app, focus/switch window,
+                                     # type_text, press_key, hotkey, take_screenshot
 
 tests/
-├── unit/          # 66 tests
-├── integration/   # 5 tests, full text-in -> reply-out chain including auth
+├── unit/          # 152 tests
+├── integration/   # 11 tests, full text-in -> reply-out chain including auth, computer control, files
 └── security/      # 2 tests, phrase never touches disk in logs or plaintext
 ```
+
+## Permission judgment calls for Phase 5
+
+Spec section 12's table only lists a few filesystem operations
+explicitly. For the rest, I classified by data-loss risk:
+
+| Tool | Level | Why |
+|---|---|---|
+| list_directory, search_files, find_file, read_file | SAFE | read-only |
+| create_file, create_directory | SAFE | refuses to overwrite; can only add |
+| append_file, copy_file | LOW | additive only, never destroys existing bytes |
+| write_file, rename_file, move_file | MEDIUM | can overwrite/relocate; destination collisions are refused, but the underlying operation still risks data loss |
+| delete_file, delete_directory | HIGH | matches spec section 12 explicitly |
+
+`delete_directory` also requires an explicit `recursive=True` for a
+non-empty directory even after HIGH gets a confirmation flow in a
+later phase - a confirmed "delete this" shouldn't accidentally mean
+"delete everything inside it" too.
+
+Every MEDIUM/HIGH tool above is registered and reachable through the
+router, but currently always denied by the permission engine, since
+there's no confirmation UI yet (proven in
+`test_delete_file_denied_without_confirmation` and similar tests) -
+this is intentional, not a gap.
+
+## Testing note: computer control tools
+
+This sandbox has no Windows and no display, so `WindowsComputerDriver`
+(the real PyAutoGUI/psutil backend) cannot be run here. To keep the
+tool *logic* - argument validation, the application whitelist,
+permission classification, structured results, and verification -
+fully tested anyway, every computer-control tool depends on a
+`ComputerDriver` interface rather than calling the OS directly:
+
+```text
+Tool (open_application, focus_window, ...)
+    -> ComputerDriver protocol
+        -> FakeComputerDriver   (used by all 116 automated tests)
+        -> WindowsComputerDriver (real OS calls, used in production)
+```
+
+`app/tools/factory.py` auto-selects `WindowsComputerDriver` when
+`platform.system() == "Windows"`, and simply skips registering
+computer tools otherwise (so Victor still boots fine in dev on
+Linux/Mac - it just won't offer computer-control tools there).
+
+**Before relying on this in production, verify on a real Windows
+machine:**
+
+```bash
+pip install psutil pyautogui
+python scripts/setup_auth.py
+python -m app.cli
+```
+
+Add at least one entry to `computer.applications` in your config
+first (e.g. `notepad: notepad.exe`), then try `open notepad`,
+`take a screenshot`, `press enter`. `close_application` will refuse
+by design (see below) until Phase 12's confirmation flow exists.
+
+## Security note: the application whitelist
+
+`open_application` and `close_application` only accept friendly names
+that are explicitly mapped to a launch command in
+`config.computer.applications`. An unlisted name is refused outright
+- Victor will never invent or guess an executable path from a
+request, which matters once real LLM tool-selection (Phase 9)
+replaces the current stub router. This also means `close_application`
+is classified **MEDIUM**, not SAFE (spec section 12 doesn't list it
+explicitly; closing an app can lose unsaved work), so it is currently
+denied for every request - by design, not a bug - until a real
+confirmation flow exists.
 
 ## Security notes for Phase 3
 
@@ -134,8 +220,10 @@ plaintext — see the authentication design in Phase 3.
 
 1. ~~Project skeleton~~
 2. ~~Tool registry + one safe tool end-to-end~~
-3. ~~Authentication (Argon2id, lockout, session timeout)~~ ← you are here
-4. Computer control
+3. ~~Authentication (Argon2id, lockout, session timeout)~~
+4. ~~Computer control~~
+5. ~~File management~~ ← you are here
+6. Terminal
 5. File management
 6. Terminal execution
 7. Browser automation

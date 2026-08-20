@@ -35,3 +35,23 @@ def test_computer_tools_skipped_when_driver_is_none():
 def test_filesystem_tool_always_registered_regardless_of_driver():
     registry = build_registry(_config(), computer_driver=None)
     assert registry.get("list_directory") is not None
+
+
+def test_all_phase5_filesystem_tools_are_registered():
+    registry = build_registry(_config(), computer_driver=None)
+    names = {t["name"] for t in registry.list_tools()}
+    assert {
+        "list_directory",
+        "search_files",
+        "find_file",
+        "read_file",
+        "create_file",
+        "write_file",
+        "append_file",
+        "create_directory",
+        "rename_file",
+        "copy_file",
+        "move_file",
+        "delete_file",
+        "delete_directory",
+    }.issubset(names)

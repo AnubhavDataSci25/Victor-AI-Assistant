@@ -21,27 +21,30 @@ class PathValidationError(Exception):
     """Raised when a requested path falls outside allowed roots."""
 
 
-def _expand_user_path(raw_path: str) -> Path:
-    if raw_path == "~" or raw_path.startswith(("~/", "~\\")):
-        home = Path(os.environ.get("HOME") or Path.home())
-        return home / raw_path[2:]
-    return Path(raw_path).expanduser()
+def _expand_user(path: str) -> Path:
+    if path == "~" or path.startswith(("~/", "~\\")):
+        home = os.environ.get("HOME")
+        if home:
+            return Path(home) / path[2:] if len(path) > 1 else Path(home)
+    return Path(path).expanduser()
 
 
 def resolve_allowed_roots(raw_roots: list[str]) -> list[Path]:
-    return [_expand_user_path(root).resolve() for root in raw_roots]
+    return [_expand_user(root).resolve() for root in raw_roots]
 
 
 def validate_path(raw_path: str, allowed_roots: list[Path]) -> Path:
     """
     Resolve `raw_path` and confirm it lives under one of the allowed
     roots. Returns the resolved, absolute Path on success. Raises
-    PathValidationError otherwise.
+    PathValidationError otherwise. Works whether or not the path
+    currently exists - callers creating a new file/directory still
+    need this check to run before anything touches disk.
     """
     if not raw_path or not raw_path.strip():
         raise PathValidationError("Path must not be empty")
 
-    candidate = _expand_user_path(raw_path).resolve()
+    candidate = _expand_user(raw_path).resolve()
 
     for root in allowed_roots:
         try:
@@ -54,3 +57,20 @@ def validate_path(raw_path: str, allowed_roots: list[Path]) -> Path:
     raise PathValidationError(
         f"Path {raw_path!r} resolves outside of Victor's allowed directories"
     )
+
+
+def validate_new_file_name(name: str) -> str:
+    """
+    Validate a bare filename (not a path) used for rename operations -
+    rejects anything containing a path separator, which would let a
+    'rename' silently become a move to an arbitrary location.
+    """
+    if not name or not name.strip():
+        raise PathValidationError("Name must not be empty")
+    if "/" in name or "\\" in name:
+        raise PathValidationError(
+            f"{name!r} must be a plain filename, not a path (use move_file to relocate)"
+        )
+    if name in (".", ".."):
+        raise PathValidationError(f"{name!r} is not a valid filename")
+    return name

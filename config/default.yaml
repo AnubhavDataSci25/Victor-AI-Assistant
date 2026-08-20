@@ -35,6 +35,8 @@ filesystem:
   # Any resolved path outside these roots is rejected (rule 7).
   allowed_roots:
     - "~"
+  # Cap on how many bytes read_file will load into memory at once.
+  max_read_bytes: 1048576
 
 computer:
   # Explicit whitelist of applications Victor may open/close.
