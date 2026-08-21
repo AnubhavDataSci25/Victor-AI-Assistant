@@ -6,14 +6,12 @@ A local-first, tool-calling personal AI computer assistant.
 
 ## Status
 
-**Phase 6 — Terminal / Code Execution.** `run_command`, `run_python`,
-`start_process`, `stop_process` are live. Command risk is classified
-per-invocation by a deterministic pattern-matching validator (spec
-section 23) - the same tool call can be LOW, MEDIUM, or BLOCKED
-depending on what command was asked for. This required a small
-architecture extension: `Tool.classify(args)` lets a tool's effective
-permission level depend on its arguments, not just its class. No
-browser, voice, or UI yet.
+**Phase 7 — Browser.** Twelve browser tools from spec section 24 are
+implemented against a driver interface, mirroring Phase 4's split:
+tool logic is fully unit-tested with `FakeBrowserDriver`; the real
+`PlaywrightBrowserDriver` is written correctly but can't run in this
+sandbox (no network access to download browser binaries) - see
+"Testing note" below. No voice or UI yet.
 
 
 ## Requirements
@@ -94,6 +92,14 @@ app/
     │   ├── validator.py            # classify_command: deterministic risk classifier
     │   ├── process_manager.py      # tracks Victor-started background processes
     │   └── tool.py                  # run_command, run_python, start/stop_process
+    ├── browser/
+    │   ├── driver.py                # BrowserDriver protocol + BrowserDriverError
+    │   ├── fake_driver.py           # in-memory driver used by all browser tool tests
+    │   ├── playwright_driver.py     # real driver: Playwright (chromium)
+    │   └── tool.py                  # 12 tools: open_url, search_web, read_page,
+    │                                 # extract_text, click_element, type_into_page,
+    │                                 # scroll_page, go_back/forward, open/close_tab,
+    │                                 # screenshot_page
     └── computer/
         ├── driver.py               # ComputerDriver protocol + DriverError
         ├── fake_driver.py          # in-memory driver used by all tool tests
@@ -102,8 +108,8 @@ app/
                                      # type_text, press_key, hotkey, take_screenshot
 
 tests/
-├── unit/          # 181 tests
-├── integration/   # 16 tests, full text-in -> reply-out chain including auth, computer control, files, terminal
+├── unit/          # 215 tests
+├── integration/   # 19 tests, full text-in -> reply-out chain including auth, computer control, files, terminal, browser
 └── security/      # 2 tests, phrase never touches disk in logs or plaintext
 ```
 
@@ -142,15 +148,66 @@ pure application code with no LLM involvement, per rule 20.
   untracked PID is refused with a clear message, not silently
   ignored or (worse) attempted against an arbitrary system process.
 - **`run_python` never touches the shell at all** - code is passed as
-  a single `argv` element to the interpreter (`subprocess.run([sys.executable, "-c", code], ...)`),
-  not shell-parsed, even though it's still classified the same LOW
-  level as `run_command`'s safest tier.
-- **`run_command`/`start_process` do use `shell=True`.** This is a
-  deliberate, documented choice (see `validator.py`'s docstring): many
-  everyday commands (`dir`, `cd`) are shell builtins with no
-  standalone executable, so `shell=False` would break basic usage.
-  Safety here comes from classification happening *before* the
-  subprocess call, not from avoiding the shell.
+  a single `argv` element to the interpreter, not shell-parsed, even
+  though it's still classified the same LOW level as `run_command`'s
+  safest tier.
+- **`run_command`/`start_process` do use `shell=True`.** Deliberate,
+  documented choice: many everyday commands (`dir`, `cd`) are shell
+  builtins with no standalone executable, so `shell=False` would break
+  basic usage. Safety comes from classification happening *before*
+  the subprocess call, not from avoiding the shell.
+
+**Flagged for expanded testing later** (per your request): more shell-
+quoting edge cases, concurrent `start_process` calls, and real
+Windows-specific `shell=True` behavior (this sandbox only proves
+POSIX shell behavior via `/bin/sh`).
+
+## Testing note: browser tools
+
+Same situation as Phase 4's computer-control tools: this sandbox has
+no network access to download Playwright's browser binaries
+(`playwright install chromium`), so `PlaywrightBrowserDriver` cannot
+run here. All 236 tests exercise browser tool logic through
+`FakeBrowserDriver` instead - argument validation, permission levels,
+verification hooks, error handling. `app/tools/factory.py`
+auto-detects whether Playwright is importable and simply skips
+registering browser tools if not, so Victor still boots fine without
+it.
+
+**Before relying on this in production:**
+
+```bash
+pip install playwright
+playwright install chromium
+python -m app.cli
+```
+
+Try `go to https://example.com`, `read the page`, `search the web for
+<something>`, `click_element h1`. `close_tab` will refuse by design
+(see below) until Phase 12's confirmation flow exists.
+
+## Security note: browser content is data, not instructions (spec section 25)
+
+`read_page`, `extract_text`, and `search_web` return whatever text is
+on a page - which could contain something that reads like an
+instruction ("ignore previous instructions and..."). Victor's
+architecture makes this structurally inert, not just policy: a
+`ToolResult` only ever flows to the responder for humanization -
+there is no code path that takes a tool's output and re-feeds it into
+the router as a new command. That will remain true once the real LLM
+replaces the router stub in Phase 9; the constraint is architectural
+(no feedback loop exists), not something that has to be remembered
+and re-enforced by prompting.
+
+## Permission judgment calls for Phase 7
+
+Consistent with the risk philosophy from Phases 4-6:
+
+| Tool | Level | Why |
+|---|---|---|
+| open_url, search_web, read_page, extract_text, scroll_page, go_back, go_forward, open_tab, screenshot_page | SAFE | read-only or purely additive |
+| click_element, type_into_page | LOW | real but bounded effect on the page, same tier as computer control's type_text/press_key |
+| close_tab | MEDIUM | can lose an unsubmitted form or unsaved page state - same reasoning as close_application in Phase 4; denied by default until confirmation exists |
 
 ## Testing note: computer control tools
 
@@ -248,8 +305,9 @@ plaintext — see the authentication design in Phase 3.
 3. ~~Authentication (Argon2id, lockout, session timeout)~~
 4. ~~Computer control~~
 5. ~~File management~~
-6. ~~Terminal~~ ← we are here
-7. Browser
+6. ~~Terminal~~
+7. ~~Browser~~ ← we are here
+8. Voice
 5. File management
 6. Terminal execution
 7. Browser automation

@@ -48,3 +48,8 @@ computer:
   applications:
     notepad: notepad.exe
   screenshot_directory: screenshots
+
+browser:
+  # Whether Playwright launches a visible or headless browser.
+  headless: true
+  default_timeout_ms: 10000

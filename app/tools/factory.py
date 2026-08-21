@@ -12,6 +12,21 @@ import platform
 
 from app.config import VictorConfig
 from app.logging import get_logger, log_event
+from app.tools.browser.driver import BrowserDriver
+from app.tools.browser.tool import (
+    ClickElementTool,
+    CloseTabTool,
+    ExtractTextTool,
+    GoBackTool,
+    GoForwardTool,
+    OpenTabTool,
+    OpenUrlTool,
+    ReadPageTool,
+    ScreenshotPageTool,
+    ScrollPageTool,
+    SearchWebTool,
+    TypeIntoPageTool,
+)
 from app.tools.computer.driver import ComputerDriver
 from app.tools.computer.tool import (
     CloseApplicationTool,
@@ -68,17 +83,47 @@ def _build_computer_driver() -> ComputerDriver | None:
     return WindowsComputerDriver()
 
 
+def _build_browser_driver(config: VictorConfig) -> BrowserDriver | None:
+    """
+    Attempts to construct the real Playwright driver. Unlike computer
+    control, browser tools aren't platform-restricted - but Playwright
+    itself might not be installed, or its browser binaries might not
+    be downloaded (`playwright install chromium`). Rather than crash
+    Victor's startup over an optional capability, we just skip
+    registering browser tools if Playwright isn't importable.
+    """
+    try:
+        import playwright.sync_api  # noqa: F401
+    except ImportError:
+        log_event(
+            logger,
+            logging.WARNING,
+            "browser_tools_unavailable",
+            reason="playwright_not_installed",
+        )
+        return None
+
+    from app.tools.browser.playwright_driver import PlaywrightBrowserDriver
+
+    return PlaywrightBrowserDriver(
+        headless=config.browser.headless,
+        default_timeout_ms=config.browser.default_timeout_ms,
+    )
+
+
 _AUTO = object()  # sentinel: "pick a driver automatically based on platform"
 
 
 def build_registry(
-    config: VictorConfig, computer_driver: ComputerDriver | None = _AUTO  # type: ignore[assignment]
+    config: VictorConfig,
+    computer_driver: ComputerDriver | None = _AUTO,  # type: ignore[assignment]
+    browser_driver: BrowserDriver | None = _AUTO,  # type: ignore[assignment]
 ) -> ToolRegistry:
     """
-    computer_driver: pass an explicit driver (e.g. FakeComputerDriver)
-    for tests. Leave unset to select a real driver based on platform,
-    or pass None explicitly to skip registering computer tools
-    entirely.
+    computer_driver / browser_driver: pass an explicit driver (e.g.
+    FakeComputerDriver, FakeBrowserDriver) for tests. Leave unset to
+    select a real driver automatically, or pass None explicitly to
+    skip registering that tool group entirely.
     """
     registry = ToolRegistry()
 
@@ -117,6 +162,21 @@ def build_registry(
         registry.register(HotkeyTool(driver=driver))
         registry.register(TakeScreenshotTool(driver=driver))
 
-    # Later phases register browser/terminal tools here.
+    # Later phases register browser tools here.
+
+    browser = _build_browser_driver(config) if browser_driver is _AUTO else browser_driver
+    if browser is not None:
+        registry.register(OpenUrlTool(driver=browser))
+        registry.register(SearchWebTool(driver=browser))
+        registry.register(ReadPageTool(driver=browser))
+        registry.register(ExtractTextTool(driver=browser))
+        registry.register(ClickElementTool(driver=browser))
+        registry.register(TypeIntoPageTool(driver=browser))
+        registry.register(ScrollPageTool(driver=browser))
+        registry.register(GoBackTool(driver=browser))
+        registry.register(GoForwardTool(driver=browser))
+        registry.register(OpenTabTool(driver=browser))
+        registry.register(CloseTabTool(driver=browser))
+        registry.register(ScreenshotPageTool(driver=browser))
 
     return registry

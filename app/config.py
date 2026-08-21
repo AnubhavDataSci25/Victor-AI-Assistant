@@ -109,6 +109,11 @@ class ComputerConfig(BaseModel):
     applications: dict[str, str] = Field(default_factory=dict)
 
 
+class BrowserConfig(BaseModel):
+    headless: bool = True
+    default_timeout_ms: int = Field(default=10_000, ge=1000)
+
+
 class VictorConfig(BaseModel):
     """Root configuration object for Victor."""
 
@@ -120,6 +125,7 @@ class VictorConfig(BaseModel):
     logging: LoggingConfig = LoggingConfig()
     filesystem: FilesystemConfig = FilesystemConfig()
     computer: ComputerConfig = ComputerConfig()
+    browser: BrowserConfig = BrowserConfig()
 
     model_config = {"extra": "forbid"}
 

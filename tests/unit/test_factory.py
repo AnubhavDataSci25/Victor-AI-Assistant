@@ -61,3 +61,33 @@ def test_all_phase6_terminal_tools_are_registered():
     registry = build_registry(_config(), computer_driver=None)
     names = {t["name"] for t in registry.list_tools()}
     assert {"run_command", "run_python", "start_process", "stop_process"}.issubset(names)
+
+
+def test_browser_tools_registered_when_driver_injected():
+    from app.tools.browser.fake_driver import FakeBrowserDriver
+
+    registry = build_registry(
+        _config(), computer_driver=None, browser_driver=FakeBrowserDriver()
+    )
+    names = {t["name"] for t in registry.list_tools()}
+    assert {
+        "open_url",
+        "search_web",
+        "read_page",
+        "extract_text",
+        "click_element",
+        "type_into_page",
+        "scroll_page",
+        "go_back",
+        "go_forward",
+        "open_tab",
+        "close_tab",
+        "screenshot_page",
+    }.issubset(names)
+
+
+def test_browser_tools_skipped_when_driver_is_none():
+    registry = build_registry(_config(), computer_driver=None, browser_driver=None)
+    names = {t["name"] for t in registry.list_tools()}
+    assert "open_url" not in names
+    assert "list_directory" in names  # filesystem tools unaffected

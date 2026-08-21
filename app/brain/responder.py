@@ -52,6 +52,22 @@ def humanize(result: ToolResult, address_as: str = "Sir") -> str:
             preview = output if len(output) <= 500 else output[:500] + "..."
             return f"Done, {address_as}. Output:\n\n{preview}"
 
+        if result.tool == "search_web":
+            results = result.data.get("results", [])
+            if not results:
+                return f"No results found, {address_as}."
+            lines = "\n".join(f"- {r['title']} ({r['url']})" for r in results[:5])
+            return f"Found {len(results)} result(s), {address_as}:\n\n{lines}"
+
+        if result.tool == "read_page":
+            title = result.data.get("title", "")
+            text = result.data.get("text", "")
+            preview = text if len(text) <= 500 else text[:500] + "..."
+            return f"{title}, {address_as}:\n\n{preview}"
+
+        if result.tool == "extract_text":
+            return f"{address_as}: {result.data.get('text', '')}"
+
         return f"Done, {address_as}. {result.message}"
 
     friendly = _FRIENDLY_ERRORS.get(result.error or "")

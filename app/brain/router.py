@@ -127,26 +127,73 @@ _START_PROCESS_PATTERNS = (
     re.compile(r"^start\s+process\s+(?P<command>.+)$", re.IGNORECASE),
 )
 
+_START_PROCESS_WITHOUT_COMMAND_PATTERNS = (
+    re.compile(r"^start_process$", re.IGNORECASE),
+    re.compile(r"^start\s+process$", re.IGNORECASE),
+)
+
 _STOP_PROCESS_PATTERNS = (
     re.compile(r"^stop_process\s+(?P<pid>\d+)$", re.IGNORECASE),
     re.compile(r"^stop\s+process\s+(?P<pid>\d+)$", re.IGNORECASE),
 )
 
-_INCOMPLETE_START_PROCESS_PATTERNS = (
-    re.compile(r"^start_process$", re.IGNORECASE),
-    re.compile(r"^start\s+process$", re.IGNORECASE),
+_OPEN_URL_PATTERNS = (
+    re.compile(r"^open_url\s+(?P<url>\S+)$", re.IGNORECASE),
+    re.compile(r"^(?:go to|navigate to|browse to)\s+(?P<url>\S+)$", re.IGNORECASE),
 )
 
-_BARE_COMMAND_PATTERNS = (
-    re.compile(
-        r"^(?:python3?|py|pytest|git|dir|ls|npm|node|npx|yarn|pip3?|where|which|echo)\b.*$",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"^(?:shutdown|format|diskpart|chkdsk|del|erase|rmdir|rm|mkfs|reg\s+delete|"
-        r"takeown|net\s+user|wevtutil|set-executionpolicy|restart-computer)\b.*$",
-        re.IGNORECASE,
-    ),
+_SEARCH_WEB_PATTERNS = (
+    re.compile(r"^search_web\s+(?P<query>.+)$", re.IGNORECASE),
+    re.compile(r"^search\s+the\s+web\s+for\s+(?P<query>.+)$", re.IGNORECASE),
+)
+
+_READ_PAGE_PATTERNS = (
+    re.compile(r"^read_page$", re.IGNORECASE),
+    re.compile(r"^read\s+the\s+page$", re.IGNORECASE),
+    re.compile(r"^what(?:'s| is)\s+on\s+this\s+page\??$", re.IGNORECASE),
+)
+
+_EXTRACT_TEXT_PATTERNS = (
+    re.compile(r"^extract_text\s+(?P<selector>.+)$", re.IGNORECASE),
+)
+
+_CLICK_ELEMENT_PATTERNS = (
+    re.compile(r"^click_element\s+(?P<selector>.+)$", re.IGNORECASE),
+    re.compile(r"^click\s+(?P<selector>.+)$", re.IGNORECASE),
+)
+
+_TYPE_INTO_PAGE_PATTERNS = (
+    re.compile(r"^type_into_page\s+(?P<selector>\S+)\s*::\s*(?P<text>.+)$", re.IGNORECASE),
+)
+
+_SCROLL_PAGE_PATTERNS = (
+    re.compile(r"^scroll_page\s+(?P<direction>up|down)(?:\s+(?P<amount>\d+))?$", re.IGNORECASE),
+    re.compile(r"^scroll\s+(?P<direction>up|down)$", re.IGNORECASE),
+)
+
+_GO_BACK_PATTERNS = (
+    re.compile(r"^go_back$", re.IGNORECASE),
+    re.compile(r"^go\s+back$", re.IGNORECASE),
+)
+
+_GO_FORWARD_PATTERNS = (
+    re.compile(r"^go_forward$", re.IGNORECASE),
+    re.compile(r"^go\s+forward$", re.IGNORECASE),
+)
+
+_OPEN_TAB_PATTERNS = (
+    re.compile(r"^open_tab(?:\s+(?P<url>\S+))?$", re.IGNORECASE),
+    re.compile(r"^(?:new|open)\s+tab(?:\s+(?P<url>\S+))?$", re.IGNORECASE),
+)
+
+_CLOSE_TAB_PATTERNS = (
+    re.compile(r"^close_tab\s+(?P<tab_id>\d+)$", re.IGNORECASE),
+    re.compile(r"^close\s+tab\s+(?P<tab_id>\d+)$", re.IGNORECASE),
+)
+
+_SCREENSHOT_PAGE_PATTERNS = (
+    re.compile(r"^screenshot_page$", re.IGNORECASE),
+    re.compile(r"^screenshot\s+the\s+page$", re.IGNORECASE),
 )
 
 _SMALL_TALK: dict[re.Pattern[str], str] = {
@@ -157,9 +204,51 @@ _SMALL_TALK: dict[re.Pattern[str], str] = {
         "I'm Victor, Sir. Your personal AI assistant."
     ),
     re.compile(r"^what can you do\??$", re.IGNORECASE): (
-        "Right now I can work with files, control basic applications, "
-        "and run terminal commands after authentication, Sir."
+        "Right now I can hold a conversation and list directory "
+        "contents, Sir. More capabilities are on the way."
     ),
+}
+
+_SHELL_COMMAND_NAMES = {
+    "cat",
+    "cd",
+    "chmod",
+    "chown",
+    "cmd",
+    "copy",
+    "cp",
+    "curl",
+    "del",
+    "dir",
+    "docker",
+    "dotnet",
+    "echo",
+    "erase",
+    "findstr",
+    "git",
+    "grep",
+    "ls",
+    "mkdir",
+    "move",
+    "mv",
+    "node",
+    "npm",
+    "pip",
+    "pip3",
+    "pnpm",
+    "powershell",
+    "pwsh",
+    "pytest",
+    "python",
+    "python3",
+    "rd",
+    "ren",
+    "rm",
+    "rmdir",
+    "shutdown",
+    "taskkill",
+    "where",
+    "yarn",
 }
 
 
@@ -168,6 +257,15 @@ class RouterOutcome:
     kind: Literal["tool_call", "conversation"]
     tool_call: ToolCallRequest | None = None
     reply: str | None = None
+
+
+def _looks_like_bare_shell_command(text: str) -> bool:
+    first_token = text.split(maxsplit=1)[0].lower()
+    command_name = first_token.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+    command_name = re.sub(r"\.(exe|cmd|bat|ps1|sh)$", "", command_name, flags=re.IGNORECASE)
+    if command_name in _SHELL_COMMAND_NAMES:
+        return True
+    return bool(re.match(r"^(python|python3|pip|pip3|node|npm|npx|yarn|pnpm)\d*$", command_name))
 
 
 class Router:
@@ -200,6 +298,127 @@ class Router:
                 return RouterOutcome(
                     kind="tool_call",
                     tool_call=ToolCallRequest(tool="take_screenshot", arguments={}),
+                )
+
+        # Browser tab commands are checked before open_application's
+        # generic "open <app>" pattern, since "open tab" / "new tab"
+        # would otherwise be swallowed as an app name.
+        for pattern in _OPEN_TAB_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                url = match.group("url")
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="open_tab", arguments={"url": url.strip() if url else None}
+                    ),
+                )
+
+        for pattern in _CLOSE_TAB_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="close_tab", arguments={"tab_id": int(match.group("tab_id"))}
+                    ),
+                )
+
+        for pattern in _OPEN_URL_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="open_url", arguments={"url": match.group("url").strip()}
+                    ),
+                )
+
+        for pattern in _SEARCH_WEB_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="search_web", arguments={"query": match.group("query").strip()}
+                    ),
+                )
+
+        for pattern in _READ_PAGE_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(tool="read_page", arguments={}),
+                )
+
+        for pattern in _EXTRACT_TEXT_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="extract_text",
+                        arguments={"selector": match.group("selector").strip()},
+                    ),
+                )
+
+        for pattern in _TYPE_INTO_PAGE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="type_into_page",
+                        arguments={
+                            "selector": match.group("selector").strip(),
+                            "text": match.group("text"),
+                        },
+                    ),
+                )
+
+        for pattern in _CLICK_ELEMENT_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="click_element",
+                        arguments={"selector": match.group("selector").strip()},
+                    ),
+                )
+
+        for pattern in _SCROLL_PAGE_PATTERNS:
+            match = pattern.match(stripped)
+            if match:
+                amount = match.groupdict().get("amount")
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(
+                        tool="scroll_page",
+                        arguments={
+                            "direction": match.group("direction").lower(),
+                            **({"amount": int(amount)} if amount else {}),
+                        },
+                    ),
+                )
+
+        for pattern in _GO_BACK_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="tool_call", tool_call=ToolCallRequest(tool="go_back", arguments={})
+                )
+
+        for pattern in _GO_FORWARD_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="tool_call", tool_call=ToolCallRequest(tool="go_forward", arguments={})
+                )
+
+        for pattern in _SCREENSHOT_PAGE_PATTERNS:
+            if pattern.match(stripped):
+                return RouterOutcome(
+                    kind="tool_call",
+                    tool_call=ToolCallRequest(tool="screenshot_page", arguments={}),
                 )
 
         for pattern in _OPEN_APP_PATTERNS:
@@ -423,11 +642,11 @@ class Router:
                     ),
                 )
 
-        for pattern in _INCOMPLETE_START_PROCESS_PATTERNS:
+        for pattern in _START_PROCESS_WITHOUT_COMMAND_PATTERNS:
             if pattern.match(stripped):
                 return RouterOutcome(
                     kind="conversation",
-                    reply='Tell me what to start, Sir. For example: "start process npm run dev".',
+                    reply="What to start, Sir?",
                 )
 
         for pattern in _RUN_PYTHON_PATTERNS:
@@ -451,15 +670,14 @@ class Router:
                     ),
                 )
 
-        for pattern in _BARE_COMMAND_PATTERNS:
-            if pattern.match(stripped):
-                return RouterOutcome(
-                    kind="tool_call",
-                    tool_call=ToolCallRequest(
-                        tool="run_command",
-                        arguments={"command": stripped},
-                    ),
-                )
+        if _looks_like_bare_shell_command(stripped):
+            return RouterOutcome(
+                kind="tool_call",
+                tool_call=ToolCallRequest(
+                    tool="run_command",
+                    arguments={"command": stripped},
+                ),
+            )
 
         return RouterOutcome(
             kind="conversation",
